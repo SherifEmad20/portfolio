@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portfolio-ingress
+  namespace: sherifemad
+  annotations:
+    cert-manager.io/cluster-issuer: production
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/client-max-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/client-body-buffer-size: "10m"
+    nginx.ingress.kubernetes.io/use-http2: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
+  labels:
+    name: portfolio-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: portfolio.s-tech.digital
+      http:
+        paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: portfolio-svc
+              port:
+                number: 80
+  tls:
+    - hosts:
+        - portfolio.s-tech.digital
+      secretName: secret-tls-frontend
