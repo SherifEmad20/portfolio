@@ -46,13 +46,9 @@ jobs:
         run: |
           set -e
           docker_tag=$(echo $GITHUB_SHA | cut -c1-7)
-          image_Name="${{ env.Docker_reg }}/${{ env.Image_Name }}:${docker_tag}"
-
-          echo "FULL_IMAGE_NAME=$image_Name" >> "$GITHUB_ENV"
-          echo "FULL_IMAGE_NAME=$image_Name" >> "$GITHUB_OUTPUT"
-
-          echo "IMAGE_TAG=$docker_tag" >> "$GITHUB_ENV"
-          echo "IMAGE_TAG=$docker_tag" >> "$GITHUB_OUTPUT"
+          full_image="${{ env.Docker_reg }}/${{ env.Image_Name }}:${docker_tag}"
+          echo "FULL_IMAGE_NAME=${full_image}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_TAG=${docker_tag}" >> "$GITHUB_OUTPUT"
 
       # 4) Build and push the Docker image to dockerhub
       - name: Build and push Docker image
@@ -60,7 +56,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.FULL_IMAGE_NAME }}
+          tags: ${{ steps.get_tag.outputs.FULL_IMAGE_NAME }}
           file: ./Dockerfile
 
   # 2) Deploy to k3s cluster
@@ -69,10 +65,10 @@ jobs:
     # Depends on the build stage
     needs: Build
 
-    # Pass the image name from the previous job
+    # Pass outputs from the Build job
     env:
-      IMAGE_TAG: ${{needs.Build.outputs.IMAGE_TAG}}
-      FULL_IMAGE_NAME: ${{needs.Build.outputs.FULL_IMAGE_NAME}}
+      IMAGE_TAG: ${{ needs.Build.outputs.IMAGE_TAG }}
+      FULL_IMAGE_NAME: ${{ needs.Build.outputs.FULL_IMAGE_NAME }}
 
     # Runs on ARC self-hosted runner
     runs-on: arc-runner-set
@@ -97,7 +93,7 @@ jobs:
           set -e
           echo "Updating image to: $FULL_IMAGE_NAME"
           yq e -i ".spec.template.spec.containers[0].image = \"${FULL_IMAGE_NAME}\"" \
-            $GITHUB_WORKSPACE/k8s/deployment.yaml
+            "$GITHUB_WORKSPACE/k8s/deployment.yaml"
 
 
       # 4) Print the deployment manifest for debugging
