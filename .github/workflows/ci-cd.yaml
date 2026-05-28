@@ -72,7 +72,7 @@ jobs:
     # Pass the image name from the previous job
     env:
       IMAGE_TAG: ${{needs.Build.outputs.IMAGE_TAG}}
-      FULL_IMAGE_NAME: ${{ needs.Build.outputs.FULL_IMAGE_NAME }}
+      FULL_IMAGE_NAME: ${{needs.Build.outputs.FULL_IMAGE_NAME}}
 
     # Runs on ARC self-hosted runner
     runs-on: arc-runner-set
