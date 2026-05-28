@@ -96,8 +96,7 @@ jobs:
           set -e
           FINAL_IMAGE="${{ needs.Build.outputs.FULL_IMAGE_NAME }}"
           echo "Updating image to: $FINAL_IMAGE"
-          IMAGE="$FINAL_IMAGE" yq e -i \
-            '(.spec.template.spec.containers[] | select(.name == "portfolio-deployment")).image = strenv(IMAGE)' \
+          yq e -i ".spec.template.spec.containers[0].image = \"${FINAL_IMAGE}\"" \
             $GITHUB_WORKSPACE/k8s/deployment.yaml
 
 
