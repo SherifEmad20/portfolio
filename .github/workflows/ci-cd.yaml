@@ -54,20 +54,7 @@ jobs:
           echo "IMAGE_TAG=$docker_tag" >> "$GITHUB_ENV"
           echo "IMAGE_TAG=$docker_tag" >> "$GITHUB_OUTPUT"
 
-      # 4) Get the short SHA hash to tag the Docker image
-      - name: Create the env file
-        run: |
-          set -e
-          rm -rf $GITHUB_WORKSPACE/.env
-          if [[ "${GITHUB_REF}" == "refs/heads/dev" ]]; then
-            echo "Using development environment variables..."
-            echo '${{ secrets.ENV_FILE_DEV }}' > $GITHUB_WORKSPACE/.env
-          else
-            echo "Using production environment variables..."
-            echo '${{ secrets.ENV_FILE_PROD }}' > $GITHUB_WORKSPACE/.env
-          fi
-
-      # 5) Build and push the Docker image to dockerhub
+      # 4) Build and push the Docker image to dockerhub
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
