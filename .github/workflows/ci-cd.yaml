@@ -72,6 +72,7 @@ jobs:
     # Pass the image name from the previous job
     env:
       IMAGE_TAG: ${{needs.Build.outputs.IMAGE_TAG}}
+      FULL_IMAGE_NAME: ${{ needs.Build.outputs.FULL_IMAGE_NAME }}
 
     # Runs on ARC self-hosted runner
     runs-on: arc-runner-set
@@ -92,13 +93,11 @@ jobs:
 
       # 3) Update image in Kubernetes deployment manifest
       - name: Update image in deployment manifest
-        env:
-          FINAL_IMAGE: ${{ needs.Build.outputs.FULL_IMAGE_NAME }}
         run: |
           set -e
-          echo "Updating image to: $FINAL_IMAGE"
-          yq e -i '.spec.template.spec.containers[0].image = env(FINAL_IMAGE)' \
-            "$GITHUB_WORKSPACE/k8s/deployment.yaml"
+          echo "Updating image to: $FULL_IMAGE_NAME"
+          yq e -i ".spec.template.spec.containers[0].image = \"${FULL_IMAGE_NAME}\"" \
+            $GITHUB_WORKSPACE/k8s/deployment.yaml
 
 
       # 4) Print the deployment manifest for debugging
