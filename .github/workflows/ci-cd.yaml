@@ -92,12 +92,13 @@ jobs:
 
       # 3) Update image in Kubernetes deployment manifest
       - name: Update image in deployment manifest
+        env:
+          FINAL_IMAGE: ${{ needs.Build.outputs.FULL_IMAGE_NAME }}
         run: |
           set -e
-          FINAL_IMAGE="${{ needs.Build.outputs.FULL_IMAGE_NAME }}"
           echo "Updating image to: $FINAL_IMAGE"
-          yq e -i ".spec.template.spec.containers[0].image = \"${FINAL_IMAGE}\"" \
-            $GITHUB_WORKSPACE/k8s/deployment.yaml
+          yq e -i '.spec.template.spec.containers[0].image = env(FINAL_IMAGE)' \
+            "$GITHUB_WORKSPACE/k8s/deployment.yaml"
 
 
       # 4) Print the deployment manifest for debugging
