@@ -85,8 +85,10 @@ jobs:
       - name: Install yq
         run: |
           set -e
-          curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq
-          chmod +x /usr/local/bin/yq
+          mkdir -p "$HOME/.local/bin"
+          curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o "$HOME/.local/bin/yq"
+          chmod +x "$HOME/.local/bin/yq"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # 3) Update image in Kubernetes deployment manifest
       - name: Update image in deployment manifest
