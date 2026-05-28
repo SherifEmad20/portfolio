@@ -1,0 +1,137 @@
+# Starter Pipeline
+# .github/workflows/pipeline.yml
+
+# 1) TRIGGER
+on:
+  workflow_dispatch:
+  push:
+    branches: [main] # e.g. main
+  #   paths:   [ "<path/**>" ]   # optional
+  # pull_request:
+  #   branches: [ <branch> ]
+
+# 2) VARIABLES
+env:
+  # Docker image name and ACR registry
+  Image_Name: "portfolio"
+  Docker_reg: "docker.io/sherifemad21"
+  KUBECONFIG: ${{ secrets.KUBECONFIG }}
+
+# 3) JOBS
+jobs:
+  # 1) Build docker image and push to dockerhub
+  Build:
+    name: Build and Push Docker image to dockerhub
+    # Set output variable to be used in the next job
+    outputs:
+      FULL_IMAGE_NAME: ${{ steps.get_tag.outputs.FULL_IMAGE_NAME }}
+      IMAGE_TAG: ${{ steps.get_tag.outputs.IMAGE_TAG }}
+    # Runs on ARC self-hosted runner
+    runs-on: arc-runner-set
+    steps:
+      # 1) Checkout the code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Login to dockerhub
+      - name: Login to dockerhub Container Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      # 3) Get the short SHA hash to tag the Docker image
+      - name: Get hash commit
+        id: get_tag
+        run: |
+          set -e
+          docker_tag=$(echo $GITHUB_SHA | cut -c1-7)
+          image_Name="${{ env.Docker_reg }}/${{ env.Image_Name }}:${docker_tag}"
+
+          echo "FULL_IMAGE_NAME=$image_Name" >> "$GITHUB_ENV"
+          echo "FULL_IMAGE_NAME=$image_Name" >> "$GITHUB_OUTPUT"
+
+          echo "IMAGE_TAG=$docker_tag" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=$docker_tag" >> "$GITHUB_OUTPUT"
+
+      # 4) Get the short SHA hash to tag the Docker image
+      - name: Create the env file
+        run: |
+          set -e
+          rm -rf $GITHUB_WORKSPACE/.env
+          if [[ "${GITHUB_REF}" == "refs/heads/dev" ]]; then
+            echo "Using development environment variables..."
+            echo '${{ secrets.ENV_FILE_DEV }}' > $GITHUB_WORKSPACE/.env
+          else
+            echo "Using production environment variables..."
+            echo '${{ secrets.ENV_FILE_PROD }}' > $GITHUB_WORKSPACE/.env
+          fi
+
+      # 5) Build and push the Docker image to dockerhub
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ env.FULL_IMAGE_NAME }}
+          file: ./Dockerfile
+
+  # 2) Deploy to k3s cluster
+  Deploy:
+    name: Deploy to k3s cluster
+    # Depends on the build stage
+    needs: Build
+
+    # Pass the image name from the previous job
+    env:
+      IMAGE_TAG: ${{needs.Build.outputs.IMAGE_TAG}}
+
+    # Runs on ARC self-hosted runner
+    runs-on: arc-runner-set
+    steps:
+
+      # 1) Checkout the code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Install yq
+      - name: Install yq
+        run: |
+          set -e
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      # 3) Update image in Kubernetes deployment manifest
+      - name: Update image in deployment manifest
+        run: |
+          set -e
+          FINAL_IMAGE="${{ needs.Build.outputs.FULL_IMAGE_NAME }}"
+          echo "Updating image to: $FINAL_IMAGE"
+          IMAGE="$FINAL_IMAGE" yq e -i \
+            '(.spec.template.spec.containers[] | select(.name == "portfolio-deployment")).image = strenv(IMAGE)' \
+            $GITHUB_WORKSPACE/k8s/deployment.yaml
+
+
+      # 4) Print the deployment manifest for debugging
+      - name: Print deployment manifest
+        run: |
+          set -e
+          # Print the combined deployment manifest
+          echo "--- Deployment Manifest ---"
+          cat $GITHUB_WORKSPACE/k8s/deployment.yaml
+
+      # 5) Deploy to k3s cluster using the updated manifest
+      - name: Deploy to k3s cluster
+        run: |
+          set -e
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+          # Setup kubeconfig from secret
+          mkdir -p ~/.kube
+          echo '${{ secrets.KUBECONFIG }}' > ~/.kube/config
+          chmod 600 ~/.kube/config
+          export KUBECONFIG=~/.kube/config
+
+          kubectl -n sherifemad apply -f $GITHUB_WORKSPACE/k8s/deployment.yaml
